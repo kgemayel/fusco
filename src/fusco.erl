@@ -521,7 +521,7 @@ is_ipv6_host(Host) ->
 %%------------------------------------------------------------------------------
 connect_socket(State) ->
     case ensure_proxy_tunnel(new_socket(State), State) of
-	{ok, Socket, _} ->
+	{ok, Socket} ->
 	    {ok, State#client_state{socket = Socket}};
 	Error ->
 	    {Error, State}
@@ -547,7 +547,12 @@ new_socket(#client_state{connect_timeout = Timeout, connect_options = ConnectOpt
                      {active, false} | ConnectOptions2],
     Reply = connect(Host, Port, SocketOptions, Timeout, Ssl),
     OnConnectFun(Reply),
-    Reply.
+    case Reply of
+        {ok, Socket, _ConnTime} ->
+            {ok, Socket};
+        _ ->
+            Reply
+    end.
 
 connect(Host, Port, SocketOptions, Timeout, Ssl) ->
     TimeB = os:timestamp(),
