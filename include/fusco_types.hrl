@@ -28,7 +28,7 @@
 
 -type headers() :: [{header(), iodata()}].
 
--type method() :: string().
+-type method() :: iodata().
 
 -type pos_timeout() ::  pos_integer() | 'infinity'.
 
@@ -60,6 +60,6 @@
                         pid().        % When partial_download option is used.
 
 -type result() ::
-        {ok, {{pos_integer(), string()}, headers(), body(),
+        {ok, {{binary(), binary()}, headers(), body(),
               non_neg_integer(), pos_timeout()}} |
         {error, atom()}.

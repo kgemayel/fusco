@@ -101,7 +101,7 @@ disconnect(Client) ->
 %% @doc Makes a request using a client already connected.
 %% @end
 %%------------------------------------------------------------------------------
--spec request(pid(), string(), method(), headers(), iodata(), pos_timeout()) -> result().
+-spec request(pid(), iodata(), method(), headers(), iodata(), pos_timeout()) -> result().
 request(Client, Path, Method, Hdrs, Body, Timeout) ->
     request(Client, Path, Method, Hdrs, Body, 1, Timeout).
 
@@ -187,7 +187,7 @@ request(Client, Path, Method, Hdrs, Body, Timeout) ->
 %% list of all available options, please check OTP's ssl module manpage.
 %% @end
 %%------------------------------------------------------------------------------
--spec request(pid(), string(), method(), headers(), iodata(), integer(), pos_timeout()) -> result().
+-spec request(pid(), iodata(), method(), headers(), iodata(), integer(), pos_timeout()) -> result().
 request(Client, Path, Method, Hdrs, Body, SendRetry, Timeout) when is_binary(Path) ->
     gen_server:call(Client, {request, Path, Method, Hdrs, Body, SendRetry, Timeout}, infinity);
 request(_, _, _, _, _, _, _) ->
