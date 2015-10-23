@@ -345,14 +345,17 @@ send_request(#client_state{socket = Socket, ssl = Ssl, request = Request,
     fusco_sock:setopts(Socket, [{send_timeout, RecvTimeout}, {send_timeout_close, true}], Ssl),
     case fusco_sock:send(Socket, Request, Ssl) of
         ok ->
-          lager:info("Send_Request OK Out=~p State=~p", [Out, State]),
+          lager:info("Send_Request attempt=~p OK Out=~p State=~p",
+            [State#client_state.attempts, Out, State]),
 	        read_response(State#client_state{out_timestamp = Out});
         {error, closed} ->
             fusco_sock:close(Socket, Ssl),
-            lager:info("Send_Request Error 1 Closed Out=~p State=~p", [Out, State]),
+            lager:info("Send_Request Error 1 Closed attempt=~p Out=~p State=~p",
+              [State#client_state.attempts, Out, State]),
             send_request(State#client_state{socket = undefined, attempts = Attempts - 1});
         {error, _Reason} ->
-            lager:info("Send_Request Error 2 ~p Out=~p State=~p", [_Reason, Out, State]),
+            lager:info("Send_Request Error 2 attempt=~p reason~p Out=~p State=~p",
+              [State#client_state.attempts, _Reason, Out, State]),
             fusco_sock:close(Socket, Ssl),
             {reply, {error, connection_closed}, State#client_state{socket = undefined}}
     end.
