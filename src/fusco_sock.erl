@@ -100,8 +100,10 @@ send(Socket, Request, false) ->
 %%------------------------------------------------------------------------------
 -spec close(socket(), boolean()) -> ok | {error, atom()}.
 close(Socket, true) ->
+    lager:info("Close SSL socket ~p", [Socket]),
     ssl:close(Socket);
 close(Socket, false) ->
+    lager:info("Close TCP socket ~p", [Socket]),
     gen_tcp:close(Socket).
 
 %%------------------------------------------------------------------------------

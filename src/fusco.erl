@@ -328,6 +328,7 @@ code_change(_OldVsn, State, _Extra) ->
 %% @end
 %%------------------------------------------------------------------------------
 send_request(#client_state{attempts = 0} = State) ->
+    lager:info("Send_Request attempt=0 state=~p", [State]),
     {reply, {error, connection_closed}, State};
 send_request(#client_state{socket = undefined} = State) ->
     % if we dont get a keep alive from the previous request, the socket is undefined.
@@ -344,11 +345,14 @@ send_request(#client_state{socket = Socket, ssl = Ssl, request = Request,
     fusco_sock:setopts(Socket, [{send_timeout, RecvTimeout}, {send_timeout_close, true}], Ssl),
     case fusco_sock:send(Socket, Request, Ssl) of
         ok ->
+          lager:info("Send_Request OK Out=~p State=~p", [Out, State]),
 	        read_response(State#client_state{out_timestamp = Out});
         {error, closed} ->
             fusco_sock:close(Socket, Ssl),
+            lager:info("Send_Request Error 1 Closed Out=~p State=~p", [Out, State]),
             send_request(State#client_state{socket = undefined, attempts = Attempts - 1});
         {error, _Reason} ->
+            lager:info("Send_Request Error 2 ~p Out=~p State=~p", [_Reason, Out, State]),
             fusco_sock:close(Socket, Ssl),
             {reply, {error, connection_closed}, State#client_state{socket = undefined}}
     end.
@@ -407,8 +411,10 @@ read_response(#client_state{socket = Socket, ssl = Ssl, use_cookies = UseCookies
                             connection_header = ConHdr, cookies = Cookies,
 			    requester = From, out_timestamp = Out, attempts = Attempts,
                 recv_timeout = RecvTimeout} = State) ->
-    case fusco_protocol:recv(Socket, Ssl, RecvTimeout) of
-	#response{status_code = <<$1,_,_>>} ->
+    lager:info("Read Response state=~p", [State]),
+    case fusco_protocol:recv(Socket, Ssl, RecvTimeout) of 
+	#response{status_code = <<$1,_,_>>} = Response ->
+      lager:info("Read Response 1 OK ~p", [Response]),
 	    %% RFC 2616, section 10.1:
             %% A client MUST be prepared to accept one or more
             %% 1xx status responses prior to a regular
@@ -418,7 +424,8 @@ read_response(#client_state{socket = Socket, ssl = Ssl, use_cookies = UseCookies
             read_response(State);
 	#response{version = Vsn, cookies = NewCookies, connection = Connection,
 		  status_code = Status, reason = Reason, headers = Headers,
-		  body = Body, size = Size, in_timestamp = In}->
+		  body = Body, size = Size, in_timestamp = In} = Response->
+      lager:info("Read Response 2 OK ~p", [Response]),
 	    gen_server:reply(
 	      From,
 	      {ok, {{Status, Reason}, Headers, Body, Size,
@@ -443,6 +450,7 @@ read_response(#client_state{socket = Socket, ssl = Ssl, use_cookies = UseCookies
 		    end
 	    end;
 	{error, closed} ->
+          lager:info("To close socket 1 error=closed after request=~p", [State]),
             % Either we only noticed that the socket was closed after we
             % sent the request, the server closed it just after we put
             % the request on the wire or the server has some isses and is
@@ -451,6 +459,7 @@ read_response(#client_state{socket = Socket, ssl = Ssl, use_cookies = UseCookies
             fusco_sock:close(Socket, Ssl),
             send_request(State#client_state{socket = undefined, attempts = Attempts - 1});
 	{error, Reason} ->
+      lager:info("To close socket 2 error=~p after request=~p", [Reason, State]),
 	    fusco_sock:close(Socket, Ssl),
 	    {reply, {error, Reason}, State#client_state{socket = undefined}}
     end.
@@ -459,29 +468,38 @@ read_response(#client_state{socket = Socket, ssl = Ssl, use_cookies = UseCookies
 %% @private
 %%------------------------------------------------------------------------------
 maybe_close_socket(<<"close">>, #client_state{socket = Socket} = State, {1, 1}, _) ->
+    lager:info("maybe_close_socket 1 reason=close state=~p", [State]),
     fusco_sock:close(Socket, State#client_state.ssl),
     undefined;
-maybe_close_socket(_, #client_state{socket = Socket}, {1, 1}, undefined) ->
+maybe_close_socket(C, #client_state{socket = Socket} = State, {1, 1}, undefined) ->
+    lager:info("maybe_close_socket 2 reason=~p state=~p", [C, State]),
     Socket;
-maybe_close_socket(_, #client_state{socket = Socket} = State, {1, 1}, ConHdr) ->
+maybe_close_socket(Reason, #client_state{socket = Socket} = State, {1, 1}, ConHdr) ->
+    lager:info("maybe_close_socket 3 reason=~p state=~p condHdr=~p", [Reason, State, ConHdr]),
     ClientConnection = fusco_lib:is_close(ConHdr),
+    lager:info("Reason=~p ClientConnection=~p State=~p", [Reason, ClientConnection, State]),
     if
         ClientConnection ->
+            lager:info("fusco_sock:close ~p state=~p ClientConnection=~p", [Reason, State, ClientConnection]),
             fusco_sock:close(Socket, State#client_state.ssl),
             undefined;
         (not ClientConnection) ->
             Socket
     end;
-maybe_close_socket(<<"keep-alive">>, #client_state{socket = Socket}, _, undefined) ->
+maybe_close_socket(<<"keep-alive">>, #client_state{socket = Socket} = State, _, undefined) ->
+    lager:info("maybe_close_socket 4 reason=keep-alive state=~p", [State]),
     Socket;
-maybe_close_socket(C, #client_state{socket = Socket} = State, _, _)
-  when C =/= <<"keep-alive">> ->
+maybe_close_socket(Reason, #client_state{socket = Socket} = State, _, _)
+  when Reason =/= <<"keep-alive">> ->
+    lager:info("maybe_close_socket 5 reason=~p state=~p", [Reason, State]),
     fusco_sock:close(Socket, State#client_state.ssl),
     undefined;
-maybe_close_socket(_, #client_state{socket = Socket} = State, _, ConHdr) ->
+maybe_close_socket(Reason, #client_state{socket = Socket} = State, _, ConHdr) ->
+    lager:info("maybe_close_socket 6 reason~p state=~p", [Reason, State]),
     ClientConnection = fusco_lib:is_close(ConHdr),
     if
         ClientConnection ->
+            lager:info("fusco_sock:close ~p state=~p ClientConnection=~p", [Reason, State, ClientConnection]),
             fusco_sock:close(Socket, State#client_state.ssl),
             undefined;
         (not ClientConnection) ->
